@@ -92,7 +92,12 @@ $pdf->addPage('l', 'A4');
 //$getAllEmpSalQry = "SELECT e.*, (SELECT department_name FROM  department_master WHERE dep_id =e.division) as dep_name, (SELECT position_name FROM  position_master WHERE position_id =e.position) as position_name, ea.*, ep.* FROM employee e INNER JOIN employee_attendance ea ON e.emp_id = ea.ref_emp_id INNER JOIN employee_payroll ep ON ea.attendance_id = ep.attendance_id WHERE work_status = '$work_status' AND e.ref_comp_id = '$company' AND ea.month='$month' AND ea.year = '$year' AND e.employe_status = 0  ORDER BY e.emp_id";
 
 $getAllEmpSalQry = "SELECT 
-ep.*,e.passport_number
+ep.*,e.passport_number,
+        e.allowance AS full_allowance,
+        e.conveyance_allowance AS full_conveyance_allowance,
+        e.food_allowance AS full_food_allowance,
+        e.medical_allowance AS full_medical_allowance,
+        e.housing_allowance AS full_housing_allowance
 FROM employee_payroll as ep 
 JOIN employee e ON e.emp_id = ep.emp_id_ 
 WHERE 
@@ -138,98 +143,25 @@ if($dataRowCount1 > 0){
 	
 	$total_rows_count = mysqli_num_rows($qryExe1);
 	while($row = mysqli_fetch_assoc($qryExe1)){ 
-		//echo "<pre>";print_r($row);exit;
-		$emp_code = $row['emp_code_'];
-		$emp_name = $row['emp_name_'];
-		$passport_number = $row['passport_number'];
-		$overtime_sal_for_curent_month = $row['overtime_sal_for_curent_month'];
-		$dep_name = $row['dep_name'];
-		$position = $row['position_name_'];
-		$no_of_wdays = $row['no_of_wdays_'];
-		$e_overtime = $row['e_overtime_']; 
-		$salary = $row['salary_'];
-		$over_time_hour_rate = $row['over_time_hour_rate_'];
-		$salary_for_this_month = round($row['salary_for_this_month']);
-		$overtime_sal_for_curent_month = $row['overtime_sal_for_curent_month'];
-		$allowance = $row['allowance'];
-		$food_allowance = $row['food_a'];
-		
-		/*$perDay_conveyance_allowance = $row['conveyance_a']/$total_days;
-		$conveyance_allowance = round($perDay_conveyance_allowance * $row['no_of_wdays']); */
-		$conveyance_allowance = $row['conveyance_a'];
-		
-		
-		$medical_allowance = $row['medical_a'];
-		$housing_allowance = $row['housing_a'];
-		$total_payable = $row['total_payable'];
-		$deduct_loan = $row['deduct_loan'];
-		
-		if($salary_for_this_month == 0 && $overtime_sal_for_curent_month == 0){
-			$tot_allowance = 0;
-		}else{
-			$tot_allowance = $allowance + $food_allowance + $conveyance_allowance + $medical_allowance + $housing_allowance;
-			
-		}
-	
-		if($tot_allowance == '' || $tot_allowance == 0){
-		   $tot_allowance = $housing_allowance;
-		   //$salary_for_this_month = $tot_allowance;
-		}
-		 
-		
-		$net_payable = round($row['net_payable']);
-		
-		$this_month_salary_total = $salary_for_this_month + $this_month_salary_total;
-		
-		$amount_of_overtime_total = $overtime_sal_for_curent_month + $amount_of_overtime_total;
-		
-		
-		
-		$total_payable_total = $total_payable + $total_payable_total;
-		
-		$advance_loan_total = $deduct_loan + $advance_loan_total;
-		
-		$net_pay_total = $net_pay_total + $net_payable;
-		
-		
+        $emp_code = $row['emp_code_'];
+        $emp_name = $row['emp_name_'];
+        $position = $row['position_name_'];
+        $salary = (float)$row['salary_'];
+        $allowence_a = (float)$row['full_allowance'];
+        $conveyance_a = (float)$row['full_conveyance_allowance'];
+        $food_a = (float)$row['full_food_allowance'];
+        $medical_a = (float)$row['full_medical_allowance'];
+        $housing_a = (float)$row['full_housing_allowance'];
+        $total_payable = $salary + $allowence_a + $conveyance_a + $food_a + $medical_a + $housing_a;
 
-		
+        $this_month_salary_total += $salary;
+        $allowance_amount_total += $allowence_a;
+        $total_conveyance += $conveyance_a;
+        $total_food += $food_a;
+        $total_medical += $medical_a;
+        $total_house += $housing_a;
+        $total_payable_total += $total_payable;
 
-
-			$month_ = $row['month'];
-			if(strlen($row['month']) == 1){
-				$month_ = '0'.$row['month'];
-			}
-
-            if($row['year'].$month_ >= '202310'){
-			$allowence_a 		= $allowance;
-			$conveyance_a 	= $conveyance_allowance;
-			$food_a 		= $food_allowance;
-			$medical_a 		= $medical_allowance;
-			$housing_a 		= $housing_allowance;
-
-			$allowance_amount_total = $allowance_amount_total + $row['allowance'];
-			$total_conveyance 		= $total_conveyance + $conveyance_a;
-			$total_food 			= $total_food + $food_a;
-			$total_medical 			= $total_medical + $medical_a;
-			$total_house 			= $total_house + $housing_allowance;
-		}else{
-			$allowence_a 		= $tot_allowance;
-			$conveyance_a 	= '';
-			$food_a 		= '';
-			$medical_a 		=  '';
-			$housing_a 		= '';
-
-			$allowance_amount_total = $tot_allowance + $allowance_amount_total;
-			$total_conveyance 		= '';
-			$total_food 			= '';
-			$total_medical 			= '';
-			$total_house 			= '';
-		}
-
-				
-		
-		
 		$html .= '<tr nobr="true">
 					<td align="center" valign="bottom" style="width:20px; font-size:9px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;">'. $sl_no .'</td>
 					<td align="center" valign="bottom" style="width:60px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;">'. $emp_code .'</td>
@@ -249,11 +181,9 @@ if($dataRowCount1 > 0){
 		if($sl_no%10 == 0 || $dataRowCount1 == $sl_no){
 			//$pdf->AddPage();8+1
 			$html .= '<tr>
-						<td height="35" align="center" colspan="3" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;"><b>TOTAL PAGE NUMBER '.$page_no.'</b>
+						<td height="35" align="center" colspan="4" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;"><b>TOTAL PAGE NUMBER '.$page_no.'</b>
 						</td>
 						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;"><b>'.$this_month_salary_total .'</b>
-						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; height: 10px;  line-height: 30px; height: 30px;"><b>'.$amount_of_overtime_total.'</b>
 						</td>
 
 						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;"><b>'.$allowance_amount_total.'</b></td>
@@ -277,36 +207,19 @@ if($dataRowCount1 > 0){
 		$net_pay_grand_total = $net_pay_total + $net_pay_grand_total;
 
 		
-		$month_ = $row['month'];
-		if(strlen($row['month']) == 1){
-			$month_ = '0'.$row['month'];
-		}
+        $allowance_grand_total += $allowance_amount_total;
+        $grand_conveyance += $total_conveyance;
+        $grand_food += $total_food;
+        $grand_medical += $total_medical;
+        $grand_house += $total_house;
 
-		if($row['year'].$month_>= '202310'){
-			$allowance_grand_total = $allowance_grand_total + $allowance_amount_total;
-			$grand_conveyance 		= $grand_conveyance + $total_conveyance;
-			$grand_food 			= $grand_food + $total_food;
-			$grand_medical 			= $grand_medical + $total_medical;
-			$grand_house 			= $grand_house + $total_house;
-
-		}else{			
-			$allowance_grand_total = $allowance_grand_total + $allowance_amount_total;
-			$grand_conveyance 		= '';
-			$grand_food 			= '';
-			$grand_medical 			= '';
-			$grand_house 			= '';
-		}
-			
 			if($sl_no == $total_rows_count){
 				$html .= '<tr>
-						<td height="10" colspan="3" align="center" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;">
+						<td height="10" colspan="4" align="center" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;">
 							<b>OVERALL TOTAL</b>
 						</td>
 						<td height="10" align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;">
 							<b>'.$salary_grand_total .'</b>
-						</td>
-						<td height="10" align="center" style="font-size:9px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;">
-							<b>'.$overt_time_grand_total.'</b>
 						</td>
 
 						<td height="10"  align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 30px; height: 30px;">
@@ -335,7 +248,7 @@ if($dataRowCount1 > 0){
 			$this_month_salary_total = $amount_of_overtime_total = $allowance_amount_total = $total_payable_total = $advance_loan_total = $net_pay_total = 0;
 			$total_allowance_column = $total_conveyance = $total_food = $total_medical = $total_house = 0;
 			
-			if($sl_no%10 == 0){
+			if($sl_no%10 == 0 && $sl_no < $total_rows_count){
 				$page_no++;
 				$html .= '</tbody></table><br pagebreak="true"/><table width="100%"  cellpadding="2" cellspacing="0"><thead>
 		

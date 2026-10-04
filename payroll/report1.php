@@ -136,7 +136,12 @@ $work_status = $_SESSION['work_status'];
 									//$getAllEmpSalQry = "SELECT e.*, (SELECT department_name FROM  department_master WHERE dep_id =e.division) as dep_name, (SELECT position_name FROM  position_master WHERE position_id =e.position) as position_name, ea.*, ep.* FROM employee e INNER JOIN employee_attendance ea ON e.emp_id = ea.ref_emp_id INNER JOIN employee_payroll ep ON ea.attendance_id = ep.attendance_id WHERE ea.month='$month' AND ea.year = '$year' ORDER BY e.emp_id";
 								}else{
 									$getAllEmpSalQry = "SELECT 
-											ep.*,e.passport_number
+											ep.*,e.passport_number,
+        e.allowance AS full_allowance,
+        e.conveyance_allowance AS full_conveyance_allowance,
+        e.food_allowance AS full_food_allowance,
+        e.medical_allowance AS full_medical_allowance,
+        e.housing_allowance AS full_housing_allowance
 											FROM employee_payroll as ep 
 											JOIN employee e ON e.emp_id = ep.emp_id_ 
 											WHERE 
@@ -161,34 +166,21 @@ $work_status = $_SESSION['work_status'];
 									$total_housing_a = 0;
 									$total_total_payable = 0;
 									while($row = mysqli_fetch_assoc($qryExe1)){ 
-										$housing_a = '';
-										$allowence = (float)$row['food_a'] + (float)$row['conveyance_a'] + (float)$row['medical_a'] +(float)$row['housing_a'] +(float)$row['allowance'] ;
-									
-				                        $month = $row['month'];
-										if(strlen($row['month']) == 1){
-											$month = '0'.$row['month'];
-										}
-										if($row['year'].$month >= '202310'){
-											$allowence = (float)$row['allowance'];
-											$conveyance_a = (float)$row['conveyance_a'];
-											$food_a = (float)$row['food_a'];
-											$medical_a =  (float)$row['medical_a'];
-											$housing_a = (float)$row['housing_a'];
-										}else{
-											$conveyance_a = '';
-											$food_a = '';
-											$medical_a =  '';
-											//$housing_a = (float)$row['housing_a'];
-										}
-										
-										// Accumulate totals
+                                        $allowence = (float)$row['full_allowance'];
+                                        $conveyance_a = (float)$row['full_conveyance_allowance'];
+                                        $food_a = (float)$row['full_food_allowance'];
+                                        $medical_a = (float)$row['full_medical_allowance'];
+                                        $housing_a = (float)$row['full_housing_allowance'];
+                                        $report_total = (float)$row['salary_'] + $allowence + $conveyance_a + $food_a + $medical_a + $housing_a;
+
+                                        // Accumulate totals
 										$total_salary += (float)$row['salary_'];
 										$total_allowence += (float)$allowence;
 										$total_conveyance_a += (float)$conveyance_a;
 										$total_food_a += (float)$food_a;
 										$total_medical_a += (float)$medical_a;
 										$total_housing_a += (float)$housing_a;
-										$total_total_payable += (int)$row['total_payable'];
+										$total_total_payable += $report_total;
 										
 									?>
 										
@@ -204,8 +196,7 @@ $work_status = $_SESSION['work_status'];
 										<td><?= (float)$food_a; ?></td>
 										<td><?= (float)$medical_a; ?></td>
 										<td><?= (float)$housing_a; ?></td>
-										<td><?= (int)$row['total_payable'] ?></td>
-										<td></td> 
+										<td><?= $report_total ?></td>
 									</tr><?php 
 									$sl_no++;
 									}
