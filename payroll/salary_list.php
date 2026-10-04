@@ -42,7 +42,12 @@ include('../header.php');
 								</tr>
 							</thead>
 							<tbody> <?php
-							$getAttendanceQry = "SELECT ea.*,ep.payroll_id,(SELECT company_name FROM company_master WHERE comp_id = ea.ref_comp_id) as company_name   FROM employee_attendance ea INNER JOIN employee_payroll ep ON ea.attendance_id  = ep.attendance_id GROUP BY ea.month, ea.year, ea.ref_comp_id ORDER BY ea.year DESC, ea.month+0 DESC";
+							$getAttendanceQry = "SELECT ea.month, ea.year, ea.ref_comp_id, cm.company_name
+                                FROM employee_attendance ea
+                                INNER JOIN employee_payroll ep ON ea.attendance_id = ep.attendance_id
+                                LEFT JOIN company_master cm ON cm.comp_id = ea.ref_comp_id
+                                GROUP BY ea.month, ea.year, ea.ref_comp_id, cm.company_name
+                                ORDER BY ea.year DESC, ea.month+0 DESC";
 							$qryExe = mysqli_query($conn, $getAttendanceQry); 
 							if(mysqli_num_rows($qryExe) > 0){ 
 								$sl_no = 1;

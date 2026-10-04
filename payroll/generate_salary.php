@@ -315,7 +315,8 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 													<div class="form-group"><?php
 														//if($salary_for_this_month > 0 && $overtime_sal_for_curent_month > 0){
 														if($salary_for_this_month > 0 ){
-															$medical_allowance = $row['medical_allowance'];
+															$perDay_medical_allowance = (float)$row['medical_allowance'] / $total_days;
+															$medical_allowance = round($perDay_medical_allowance * $row['no_of_wdays']);
 														}else{
 															$medical_allowance = 0;
 														}

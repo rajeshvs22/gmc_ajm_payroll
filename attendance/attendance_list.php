@@ -35,7 +35,11 @@ include('../header.php');
 								</tr>
 							</thead>
 							<tbody> <?php
-							$getAttendanceQry = "SELECT *,(SELECT company_name FROM company_master WHERE comp_id= ref_comp_id) as company_name FROM employee_attendance GROUP BY month, year, ref_comp_id ORDER BY year DESC, month+0 DESC, ref_comp_id ASC";
+							$getAttendanceQry = "SELECT ea.month, ea.year, ea.ref_comp_id, cm.company_name
+                                FROM employee_attendance ea
+                                LEFT JOIN company_master cm ON cm.comp_id = ea.ref_comp_id
+                                GROUP BY ea.month, ea.year, ea.ref_comp_id, cm.company_name
+                                ORDER BY ea.year DESC, ea.month+0 DESC, ea.ref_comp_id ASC";
 							$qryExe = mysqli_query($conn, $getAttendanceQry); 
 							if(mysqli_num_rows($qryExe) > 0){ 
 								$sl_no = 1;
