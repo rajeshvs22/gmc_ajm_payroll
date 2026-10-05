@@ -70,9 +70,60 @@ $(document).ready(function(){
 		
 	})
 	
-	$('.submit-btn').on('click', function(){
+	$('.submit-btn').not('#add-sal-form .submit-btn').on('click', function(){
 		$('.loader').css('display', 'block');
 	});
+
+    $('#add-sal-form .attendance-working-days').on('input', function () {
+        this.setCustomValidity('');
+        var days = this.valueAsNumber;
+        var maxDays = Number(this.max);
+        if (this.value === '' || !Number.isFinite(days) || days < 0 || days > maxDays) {
+            this.setCustomValidity('Working days must be between 0 and ' + maxDays + ' for the selected month.');
+        }
+    });
+
+    var attendanceForm = document.getElementById('add-sal-form');
+    if (attendanceForm) {
+        // Native validation can block submit entirely; invalid does not bubble.
+        attendanceForm.addEventListener('invalid', function () {
+            $('.loader').hide();
+        }, true);
+    }
+
+    $('#add-sal-form').on('click', 'button[type="submit"]', function (e) {
+        var form = this.form;
+        $('.loader').hide();
+        if (form && !form.checkValidity()) {
+            e.preventDefault();
+            form.reportValidity();
+        }
+    }).on('submit', function (e) {
+        if (!this.checkValidity()) {
+            e.preventDefault();
+            this.reportValidity();
+            $('.loader').hide();
+            return;
+        }
+        var attendance = {};
+        var fields = this.querySelectorAll('input[name^="no_of_wdays_"], input[name^="e_overtime_"]');
+        fields.forEach(function (field) {
+            attendance[field.name] = field.value;
+        });
+        var payload = this.querySelector('input[name="attendance_payload"]');
+        if (!payload) {
+            payload = document.createElement('input');
+            payload.type = 'hidden';
+            payload.name = 'attendance_payload';
+            this.appendChild(payload);
+        }
+        payload.value = JSON.stringify(attendance);
+        // Keep just the payload, selected period and submit button in the POST.
+        fields.forEach(function (field) {
+            field.disabled = true;
+        });
+        $('.loader').css('display', 'block');
+    });
 	
 	
 	$('#attendance-main-fm').submit(function( e ) {

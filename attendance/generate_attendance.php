@@ -2,45 +2,110 @@
 
 include('../header.php');
 
-$company ="";
-if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
-	$company = $_GET['cmpy'];
+$company = filter_var($_GET['cmpy'] ?? null, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1)));
+$param_month = filter_var($_GET['month'] ?? null, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 12)));
+$param_year = filter_var($_GET['year'] ?? null, FILTER_VALIDATE_INT, array('options' => array('min_range' => 2020, 'max_range' => 2050)));
+$valid_period = $company !== false && $param_month !== false && $param_year !== false;
+$max_working_days = $valid_period ? cal_days_in_month(CAL_GREGORIAN, $param_month, $param_year) : 0;
+$attendance_error = '';
+$attendance_success = '';
+
+// One JSON field avoids PHP truncating attendance for large employee lists.
+if (isset($_POST['attendance_payload'])) {
+    $payload = is_string($_POST['attendance_payload']) ? json_decode($_POST['attendance_payload'], true) : null;
+    if (!is_array($payload) || json_last_error() !== JSON_ERROR_NONE) {
+        $attendance_error = 'Attendance could not be read. Please reload the page and try again.';
+    } else {
+        foreach ($payload as $field => $value) {
+            if (preg_match('/^(no_of_wdays|e_overtime)_\d+$/', $field)) {
+                $_POST[$field] = $value;
+            }
+        }
+    }
+}
+
+// Validate the entire submission before saving any employee's attendance.
+if (isset($_POST['submit']) && $attendance_error === '') {
+    $posted_month = filter_var($_POST['month'] ?? null, FILTER_VALIDATE_INT);
+    $posted_year = filter_var($_POST['year'] ?? null, FILTER_VALIDATE_INT);
+    if (!$valid_period || $posted_month !== $param_month || $posted_year !== $param_year) {
+        $attendance_error = 'Please choose a valid company, month and year before saving attendance.';
+    } else {
+        foreach ($_POST as $field => $days) {
+            if (preg_match('/^no_of_wdays_\d+$/', $field)) {
+                if (!is_scalar($days) || !is_numeric($days) || !is_finite((float) $days)
+                    || (float) $days < 0 || (float) $days > $max_working_days) {
+                    $attendance_error = 'Working days must be a number between 0 and ' . $max_working_days . ' for the selected month. Attendance was not saved.';
+                    break;
+                }
+                $overtime_field = str_replace('no_of_wdays_', 'e_overtime_', $field);
+                $overtime = $_POST[$overtime_field] ?? '';
+                if (!is_scalar($overtime) || (trim((string) $overtime) !== ''
+                    && (!is_numeric($overtime) || !is_finite((float) $overtime) || (float) $overtime < 0))) {
+                    $attendance_error = 'Overtime must be a non-negative number or left blank. Attendance was not saved.';
+                    break;
+                }
+            }
+        }
+    }
 }
 
 
+if (isset($_POST['submit']) && $attendance_error === '') {
+    $transaction_started = false;
+    $statements = array();
+    try {
+        mysqli_begin_transaction($conn);
+        $transaction_started = true;
+        $employee_stmt = mysqli_prepare($conn, 'SELECT emp_id FROM employee WHERE ref_comp_id = ? AND work_status = ?');
+        $statements[] = $employee_stmt;
+        mysqli_stmt_bind_param($employee_stmt, 'is', $company, $work_status);
+        mysqli_stmt_execute($employee_stmt);
+        $employees = mysqli_stmt_get_result($employee_stmt);
 
-if(isset($_POST['submit'])){
-	$month = $_POST['month'];
-	$year = $_POST['year'];
-	
-	$getAllEmpQry1 = "SELECT * FROM employee";
-	
-	$qryExe1 = mysqli_query($conn, $getAllEmpQry1); 
-	if(mysqli_num_rows($qryExe1) > 0){ 
-		while($row1 = mysqli_fetch_assoc($qryExe1)){
-			
-			$emp_id = $row1['emp_id'];
-			
-			if(isset($_POST['e_overtime_'.$emp_id]) || isset($_POST['no_of_wdays_'.$emp_id])){
-				
-				$e_overtime = $_POST['e_overtime_'.$emp_id];
-				$no_of_wdays = $_POST['no_of_wdays_'.$emp_id];
-				
-				//echo "asd".$e_overtime."<br>";
-				$getAttendanceQry2 = "SELECT * FROM employee_attendance WHERE ref_emp_id='$emp_id' AND month='$month' AND year='$year'";
-				$qryExe2 = mysqli_query($conn, $getAttendanceQry2); 
-				if(mysqli_num_rows($qryExe2) == 0){ 
-					$insertAttendanceQry3 = "INSERT INTO employee_attendance(ref_comp_id, ref_emp_id, no_of_wdays, e_overtime, month, year) VALUES('$company', '$emp_id','$no_of_wdays','$e_overtime','$month','$year')";
-					
-					mysqli_query($conn,$insertAttendanceQry3) or die(mysqli_error($insertAttendanceQry3));
-				}else{
-					$updateAttendanceQry4 = "UPDATE employee_attendance SET ref_comp_id = $company, no_of_wdays='$no_of_wdays',e_overtime='$e_overtime' WHERE ref_emp_id='$emp_id' AND month='$month' AND year ='$year'";
-					mysqli_query($conn,$updateAttendanceQry4) or die(mysqli_error($updateAttendanceQry4));
-				}
-			}
-			
-		}
-	}
+        $find_stmt = mysqli_prepare($conn, 'SELECT attendance_id FROM employee_attendance WHERE ref_emp_id = ? AND month = ? AND year = ?');
+        $statements[] = $find_stmt;
+        $insert_stmt = mysqli_prepare($conn, 'INSERT INTO employee_attendance (ref_comp_id, ref_emp_id, no_of_wdays, e_overtime, month, year) VALUES (?, ?, ?, ?, ?, ?)');
+        $statements[] = $insert_stmt;
+        $update_stmt = mysqli_prepare($conn, 'UPDATE employee_attendance SET ref_comp_id = ?, no_of_wdays = ?, e_overtime = ? WHERE ref_emp_id = ? AND month = ? AND year = ?');
+        $statements[] = $update_stmt;
+        $saved_count = 0;
+        while ($employee = mysqli_fetch_assoc($employees)) {
+            $emp_id = (int) $employee['emp_id'];
+            if (!isset($_POST['no_of_wdays_'.$emp_id])) {
+                continue;
+            }
+            $no_of_wdays = (float) $_POST['no_of_wdays_'.$emp_id];
+            // Blank overtime means no overtime, never an empty decimal value.
+            $e_overtime = (float) ($_POST['e_overtime_'.$emp_id] ?? 0);
+            mysqli_stmt_bind_param($find_stmt, 'iii', $emp_id, $param_month, $param_year);
+            mysqli_stmt_execute($find_stmt);
+            $existing = mysqli_stmt_get_result($find_stmt);
+            $exists = mysqli_num_rows($existing) > 0;
+            mysqli_free_result($existing);
+            if ($exists) {
+                mysqli_stmt_bind_param($update_stmt, 'iddiii', $company, $no_of_wdays, $e_overtime, $emp_id, $param_month, $param_year);
+                mysqli_stmt_execute($update_stmt);
+            } else {
+                mysqli_stmt_bind_param($insert_stmt, 'iiddii', $company, $emp_id, $no_of_wdays, $e_overtime, $param_month, $param_year);
+                mysqli_stmt_execute($insert_stmt);
+            }
+            $saved_count++;
+        }
+        mysqli_commit($conn);
+        $transaction_started = false;
+        $attendance_success = 'Attendance saved successfully for ' . $saved_count . ' employees.';
+    } catch (Throwable $error) {
+        if ($transaction_started) {
+            mysqli_rollback($conn);
+        }
+        error_log('Attendance save failed: ' . $error->getMessage());
+        $attendance_error = 'Attendance could not be saved. No changes were saved. Please try again.';
+    } finally {
+        foreach ($statements as $statement) {
+            mysqli_stmt_close($statement);
+        }
+    }
 }
 
 ?>
@@ -131,9 +196,13 @@ if(isset($_POST['submit'])){
 		</form>
 		
 		<?php
-		if(isset($_GET['month']) && isset($_GET['cmpy']) && isset($_GET['year'])){
-			$param_month = $_GET['month'];
-			$param_year = $_GET['year'];
+		if ($attendance_error !== '') { ?>
+			<div class="alert alert-danger" role="alert"><?= htmlspecialchars($attendance_error, ENT_QUOTES, 'UTF-8') ?></div>
+		<?php }
+		if ($attendance_success !== '') { ?>
+			<div class="alert alert-success" role="alert"><?= htmlspecialchars($attendance_success, ENT_QUOTES, 'UTF-8') ?></div>
+		<?php }
+		if($valid_period){
 		?>
 		<form id="add-sal-form" method="POST">
 		<div class="row">
@@ -181,9 +250,9 @@ if(isset($_POST['submit'])){
 								while($row = mysqli_fetch_assoc($qryExe)){
 									$overtime = "";
 									$emp_id = $row['emp_id'];
-									$month = $_GET['month'];
-									$year = $_GET['year'];
-									$working_days = cal_days_in_month(CAL_GREGORIAN,$month,$year);
+									$month = $param_month;
+									$year = $param_year;
+									$working_days = $max_working_days;
 									
 									$getAttendanceQry = "SELECT * FROM employee_attendance WHERE ref_emp_id='$emp_id' AND month='$month' AND year='$year'";
 									
@@ -193,6 +262,12 @@ if(isset($_POST['submit'])){
 										$overtime = $row1['e_overtime'];
 										$working_days = $row1['no_of_wdays'];
 									}
+									if ($attendance_error !== '' && isset($_POST['no_of_wdays_'.$emp_id]) && is_scalar($_POST['no_of_wdays_'.$emp_id])) {
+										$working_days = $_POST['no_of_wdays_'.$emp_id];
+									}
+									if ($attendance_error !== '' && isset($_POST['e_overtime_'.$emp_id]) && is_scalar($_POST['e_overtime_'.$emp_id])) {
+										$overtime = $_POST['e_overtime_'.$emp_id];
+									}
 									?>
 									<tr>
 										<td><?= $sl_no ?></td>
@@ -201,12 +276,12 @@ if(isset($_POST['submit'])){
 										<td><?= $row['position_name'] ?></td>
 										<td>
 											<div class="form-group">
-												<input type="text" class="form-control" name="no_of_wdays_<?= $row['emp_id']?>" id="no_of_wdays" value="<?= $working_days ?>">
+												<input type="number" class="form-control attendance-working-days" name="no_of_wdays_<?= $row['emp_id']?>" id="no_of_wdays_<?= $row['emp_id']?>" min="0" max="<?= $max_working_days ?>" step="any" required value="<?= htmlspecialchars((string) $working_days, ENT_QUOTES, 'UTF-8') ?>">
 											</div>
 										</td>
 										<td>
 											<div class="form-group">
-												<input type="text" class="form-control" name="e_overtime_<?= $row['emp_id']?>" id="e_overtime" value="<?= $overtime ?>">
+												<input type="text" class="form-control" name="e_overtime_<?= $row['emp_id']?>" id="e_overtime_<?= $row['emp_id']?>" value="<?= htmlspecialchars((string) $overtime, ENT_QUOTES, 'UTF-8') ?>">
 											</div>
 										</td>
 									</tr><?php
@@ -223,8 +298,8 @@ if(isset($_POST['submit'])){
 					</div><?php
 					if($dataRowCount > 0){ ?>
 						<div class="submit-section">
-							<input type="hidden" value="<?= $_GET['month'] ?>" id="month" name="month">
-							<input type="hidden" value="<?= $_GET['year'] ?>" id="year" name="year">
+							<input type="hidden" value="<?= $param_month ?>" name="month">
+							<input type="hidden" value="<?= $param_year ?>" name="year">
 							<button class="btn btn-primary submit-btn" type="submit" name="submit">Save All</button>
 						</div><?php
 					} ?>
@@ -244,7 +319,7 @@ require '../footer.php'
 
 ?>
 
-<script  src="<?php echo WEB_URL; ?>assets/js/c_generate_attendance.js"></script>
+<script src="<?= WEB_URL ?>assets/js/c_generate_attendance.js?v=<?= filemtime(__DIR__ . '/../assets/js/c_generate_attendance.js') ?>"></script>
 
 <script>
 $(document).ready(function(){
