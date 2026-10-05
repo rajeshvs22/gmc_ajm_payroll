@@ -1,29 +1,40 @@
 <?php 
 
 require '../config.php';
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] != 1) {
+    header('Location:' . WEB_URL);
+    exit;
+}
+require_once __DIR__ . '/salary_project_report_data.php';
+$filters = projectSalaryFilters($_GET);
+if (!$filters['valid']) {
+    http_response_code(400);
+    exit('Please select a valid project, month and year, and a valid company or All Companies.');
+}
 ini_set('max_execution_time', 0);
 require_once("../libraries/TCPDF-main/tcpdf.php");
 
 $work_status = $_SESSION['work_status'];
-$project_id ="";
-if(isset($_GET['project_id']) && !empty($_GET['project_id'])){
-	$project_id = $_GET['project_id'];
-	$getCompNameQry = "SELECT proj_name FROM project_details WHERE proj_id=".$project_id;
-	$getCompNameQryExe = mysqli_query($conn, $getCompNameQry);
-	$theCompNameResult = mysqli_fetch_assoc($getCompNameQryExe);
-	$project_name = $theCompNameResult['proj_name'];
+$company = $filters['company'];
+$project_id = $filters['project_id'];
+$month = $filters['month'];
+$year = $filters['year'];
+$theCompName = 'All Companies';
+if ($company !== '') {
+    $getCompNameQryExe = mysqli_query($conn, "SELECT company_name FROM company_master WHERE comp_id=" . (int) $company);
+    $theCompNameResult = mysqli_fetch_assoc($getCompNameQryExe);
+    $theCompName = $theCompNameResult['company_name'] ?? '';
 }
-
-$month = $_GET['month'];
-$year = $_GET['year'];
-
-$total_days = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-
-$monthNum  = $month;
-$dateObj   = DateTime::createFromFormat('!m', $monthNum);
+$projectResult = mysqli_query($conn, "SELECT proj_name FROM project_details WHERE proj_id=" . (int) $project_id);
+$projectRow = mysqli_fetch_assoc($projectResult);
+$projectName = $projectRow['proj_name'] ?? '';
+$dateObj = DateTime::createFromFormat('!m', (string) $month);
 
 global $salary_monthYr;
-$salary_monthYr = '<div style="text-align:center; font-size: 12px;"><center>'.$project_name.' <br> LIST OF SALARY PAYMENT FOR '.strtoupper($dateObj->format('F')).' '.$year.' </center></div>';
+$salary_monthYr = '<div style="text-align:center; font-size: 12px;"><center>'
+    . htmlspecialchars($theCompName, ENT_QUOTES, 'UTF-8') . '<br>PROJECT: '
+    . htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8') . '<br>LIST OF SALARY PAYMENT FOR '
+    . strtoupper($dateObj->format('F')) . ' ' . $year . '</center></div>';
 
 
 class MYPDF extends TCPDF {
@@ -89,42 +100,31 @@ if (@file_exists(dirname(__FILE__).'/lang/eng.php')) {
 // add a new page for TOC
 $pdf->addPage('l', 'A4');
 
-//$getAllEmpSalQry = "SELECT e.*, (SELECT department_name FROM  department_master WHERE dep_id =e.division) as dep_name, (SELECT position_name FROM  position_master WHERE position_id =e.position) as position_name, ea.*, ep.* FROM employee e INNER JOIN employee_attendance ea ON e.emp_id = ea.ref_emp_id INNER JOIN employee_payroll ep ON ea.attendance_id = ep.attendance_id WHERE work_status = '$work_status' AND e.ref_comp_id = '$project_id' AND ea.month='$month' AND ea.year = '$year' AND e.employe_status = 0  ORDER BY e.emp_id";
-
-
-$getAllEmpSalQry = "SELECT 
-					ep.*,e.passport_number
-					FROM employee_payroll as ep 
-					JOIN employee e ON e.emp_id = ep.emp_id_ 
-					WHERE 
-					ep.month='$month' AND 
-					ep.year = '$year'  AND 
-					ep.project_id_ = '$project_id' AND
-					ep.work_status_ = '".$work_status."'
-					ORDER BY e.emp_id";
-											
-$qryExe1 = mysqli_query($conn, $getAllEmpSalQry); 
+$qryExe1 = projectSalaryRows($conn, $filters, $work_status);
 $dataRowCount1 = mysqli_num_rows($qryExe1); 
 $html = ""; 
 $html .='<div style="overflow-x: auto;"> <table width="100%"  cellpadding="2" cellspacing="0"><thead>
 		
 				<tr style="background-color: #FFFF00; color: #000;">
-					<th align="center" style="width:25px; font-size:7px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">S/NO</th>
-					<th align="center" style="width:40px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">CODE NO</th>
+					<th align="center" style="width:20px; font-size:7px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">S/NO</th>
+					<th align="center" style="width:30px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">CODE NO</th>
 					<th align="center" style="width:100px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">FULL NAME</th>
 					<th align="center" style="width:50px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">PASSPORT NO</th>
 					<th align="center" style="width:60px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">DESIGNATION</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">NUMBER OF DATES</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME (HOUR)</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">MONTHLY SALARY</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME FOR AN HOUR</th> 
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">SALARY FOR THIS MONTH</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">AMOUNT OF OVERTIME</th> 
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ALLOWANCE AMOUNT</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">NUMBER OF DATES</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME (HOUR)</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">MONTHLY SALARY</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME FOR AN HOUR</th> 
+					<th align="center" style="width:40px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">SALARY FOR THIS MONTH</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">AMOUNT OF OVERTIME</th> 
+					<th align="center" style="width:40px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ALLOWANCE</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">CONVEYANCE ALLOWANCE</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">FOOD ALLOWANCE</th>
+					<th align="center" style="width:38px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">MEDICAL ALLOWANCE</th>
+					<th align="center" style="width:38px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">HOUSING ALLOWANCE</th>
 					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">TOTAL PAYABLE</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ADVANCE/  LOAN</th>
+					<th align="center" style="width:38px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ADVANCE/  LOAN</th>
 					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">NET PAYABLE</th> 
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">SIGNATURE</th>
 				</tr>
 			</thead>
 			<tbody>';
@@ -137,49 +137,41 @@ if($dataRowCount1 > 0){
 	$this_month_salary_total = $amount_of_overtime_total = $allowance_amount_total = $total_payable_total = $advance_loan_total = $net_pay_total = 0;
 	
 	$salary_grand_total = $overt_time_grand_total = $allowance_grand_total = $total_payable_grand_total = $advance_loan_grand_total = $net_pay_grand_total = 0;
+
+	$total_allowance_column = $total_conveyance = $total_food = $total_medical = $total_house = 0;
+	$grand_allowance_column = $grand_conveyance = $grand_food = $grand_medical = $grand_house = 0;
+
 	
 	$total_rows_count = mysqli_num_rows($qryExe1);
 	while($row = mysqli_fetch_assoc($qryExe1)){ 
-		$emp_code = $row['emp_code_'];
-		$emp_name = $row['emp_name_'];
-		$passport_number = $row['passport_number'];
+		//echo "<pre>";print_r($row);exit;
+		$emp_code = htmlspecialchars($row['emp_code_'] ?? '', ENT_QUOTES, 'UTF-8');
+		$emp_name = htmlspecialchars($row['emp_name_'] ?? '', ENT_QUOTES, 'UTF-8');
+		$passport_number = htmlspecialchars($row['passport_number'] ?? '', ENT_QUOTES, 'UTF-8');
 		$overtime_sal_for_curent_month = $row['overtime_sal_for_curent_month'];
-		$dep_name = $row['dep_name_'];
-		$position = $row['position_name_'];
+		$position = htmlspecialchars($row['position_name_'] ?? '', ENT_QUOTES, 'UTF-8');
 		$no_of_wdays = $row['no_of_wdays_'];
 		$e_overtime = $row['e_overtime_']; 
 		$salary = $row['salary_'];
 		$over_time_hour_rate = $row['over_time_hour_rate_'];
-		$salary_for_this_month = round($row['salary_for_this_month']);
+		$salary_for_this_month = (float)$row['salary_for_this_month'];
 		$overtime_sal_for_curent_month = $row['overtime_sal_for_curent_month'];
-		$allowance = $row['allowance'];
-		$food_allowance = $row['food_a'];
-		
-		$perDay_conveyance_allowance = $row['conveyance_a']/$total_days;
-		$conveyance_allowance = round($perDay_conveyance_allowance * $row['no_of_wdays']); 
-		//$conveyance_allowance = $row['conveyance_allowance'];
-		
-		
-		$medical_allowance = $row['medical_a'];
-		$housing_allowance = $row['housing_a'];
-		$total_payable = $row['total_payable'];
-		$deduct_loan = $row['deduct_loan'];
-		
-		if($salary_for_this_month == 0 && $overtime_sal_for_curent_month == 0){
-			$tot_allowance = $housing_allowance;
-		}else{
-			$tot_allowance = $allowance + $food_allowance + $conveyance_allowance + $medical_allowance + $housing_allowance;
-			
-		}
-		
-		
-		$net_payable = round($row['net_payable']);
+        $allowances = projectSalaryAllowances($row);
+        $allowence_a = $allowances['allowance'];
+        $conveyance_a = $allowances['conveyance'];
+        $food_a = $allowances['food'];
+        $medical_a = $allowances['medical'];
+        $housing_a = $allowances['housing'];
+        $total_payable = (float) $row['total_payable'];
+        $deduct_loan = (float) $row['deduct_loan'];
+
+		$net_payable = (float)$row['net_payable'];
 		
 		$this_month_salary_total = $salary_for_this_month + $this_month_salary_total;
 		
 		$amount_of_overtime_total = $overtime_sal_for_curent_month + $amount_of_overtime_total;
 		
-		$allowance_amount_total = $tot_allowance + $allowance_amount_total;
+		
 		
 		$total_payable_total = $total_payable + $total_payable_total;
 		
@@ -188,108 +180,149 @@ if($dataRowCount1 > 0){
 		$net_pay_total = $net_pay_total + $net_payable;
 		
 		
+
 		
-		
+
+
+        $allowance_amount_total += $allowence_a;
+        $total_conveyance += $conveyance_a;
+        $total_food += $food_a;
+        $total_medical += $medical_a;
+        $total_house += $housing_a;
+
 		$html .= '<tr nobr="true">
-					<td align="center" valign="bottom" style="width:25px; font-size:9px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;">'. $sl_no .'</td>
-					<td align="center" valign="bottom" style="width:40px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;">'. $emp_code .'</td>
-					<td align="center" valign="bottom" style="width:100px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;">'. $emp_name .'</td>
-					<td align="center" valign="bottom" style="width:50px;  font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; line-height: 30px;">'. $passport_number .'</td>
-					<td align="center" valign="bottom" style="width:60px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;">'. $position .'</td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; color: #095779; height: 35px; line-height: 30px;"><b>'. $no_of_wdays .'</b></td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; color: #095779; height: 35px; line-height: 30px;"><b>'. $e_overtime .'</b></td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; color: #095779; height: 35px; line-height: 30px;"><b>'. $salary .'</b></td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px;">'. $over_time_hour_rate .'</td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px;">'. $salary_for_this_month .'</td> 
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px;">'. $overtime_sal_for_curent_month .'</td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px;">'. $tot_allowance .'</td>
-					<td align="center" valign="bottom" style="width:45px; font-size:10px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px; color: #095779;"><b>'. $total_payable .'</b></td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px;">'. $deduct_loan .'</td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px; line-height: 30px;">'. $net_payable .'</td>
-					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 35px;"></td>
+					<td align="center" valign="bottom" style="width:20px; font-size:9px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px;">'. $sl_no .'</td>
+					<td align="center" valign="bottom" style="width:30px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px;">'. $emp_code .'</td>
+					<td align="center" valign="bottom" style="width:100px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px;">'. $emp_name .'</td>
+					<td align="center" valign="bottom" style="width:50px;  font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; line-height: 24px;">'. $passport_number .'</td>
+					<td align="center" valign="bottom" style="width:60px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px;">'. $position .'</td>
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; color: #095779; height: 28px; line-height: 24px;"><b>'. $no_of_wdays .'</b></td>
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; color: #095779; height: 28px; line-height: 24px;"><b>'. $e_overtime .'</b></td>
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; color: #095779; height: 28px; line-height: 24px;"><b>'. $salary .'</b></td>
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $over_time_hour_rate .'</td>
+					<td align="center" valign="bottom" style="width:40px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $salary_for_this_month .'</td> 
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $overtime_sal_for_curent_month .'</td>
+					<td align="center" valign="bottom" style="width:40px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $allowence_a .'</td>
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $conveyance_a .'</td>
+					<td align="center" valign="bottom" style="width:35px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $food_a .'</td>
+					<td align="center" valign="bottom" style="width:38px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $medical_a .'</td>
+					<td align="center" valign="bottom" style="width:38px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $housing_a .'</td>
+					<td align="center" valign="bottom" style="width:45px; font-size:10px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px; color: #095779;"><b>'. $total_payable .'</b></td>
+					<td align="center" valign="bottom" style="width:38px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $deduct_loan .'</td>
+					<td align="center" valign="bottom" style="width:45px; font-size:9px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000; height: 28px; line-height: 24px;">'. $net_payable .'</td>
+					
 				</tr>';
 		
 		if($sl_no%10 == 0 || $dataRowCount1 == $sl_no){
 			//$pdf->AddPage();8+1
 			$html .= '<tr>
-						<td align="center" colspan="9" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;"><b>TOTAL PAGE NUMBER '.$page_no.'</b>
+						<td height="28" align="center" colspan="9" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>TOTAL PAGE NUMBER '.$page_no.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;"><b>'.$this_month_salary_total .'</b>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$this_month_salary_total .'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; height: 10px;  line-height: 20px; height: 20px;"><b>'.$amount_of_overtime_total.'</b>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; height: 10px;  line-height: 24px; height: 24px;"><b>'.$amount_of_overtime_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;"><b>'.$allowance_amount_total.'</b>
+
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$allowance_amount_total.'</b></td>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$total_conveyance.'</b></td>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$total_food.'</b></td>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$total_medical.'</b></td>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$total_house.'</b></td>
+
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$total_payable_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;"><b>'.$total_payable_total.'</b>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$advance_loan_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;"><b>'.$advance_loan_total.'</b>
+						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;"><b>'.$net_pay_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red;o border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;"><b>'.$net_pay_total.'</b>
-						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
-						</td>
+						
 					</tr>';
 			
 			/* $this_month_salary_total = $amount_of_overtime_total = $allowance_amount_total = $total_payable_total = $advance_loan_total = $net_pay_tota = 0; */
 			
-			$salary_grand_total = $this_month_salary_total + $salary_grand_total;
-			$overt_time_grand_total = $amount_of_overtime_total + $overt_time_grand_total;
-			$allowance_grand_total = $allowance_amount_total + $allowance_grand_total;
-			$total_payable_grand_total = $total_payable_total + $total_payable_grand_total;
-			$advance_loan_grand_total = $advance_loan_total + $advance_loan_grand_total;
-			$net_pay_grand_total = $net_pay_total + $net_pay_grand_total;
-			
+		$salary_grand_total = $this_month_salary_total + $salary_grand_total;
+		$overt_time_grand_total = $amount_of_overtime_total + $overt_time_grand_total;
+		
+		$total_payable_grand_total = $total_payable_total + $total_payable_grand_total;
+		$advance_loan_grand_total = $advance_loan_total + $advance_loan_grand_total;
+		$net_pay_grand_total = $net_pay_total + $net_pay_grand_total;
+
+		
+        $allowance_grand_total += $allowance_amount_total;
+        $grand_conveyance += $total_conveyance;
+        $grand_food += $total_food;
+        $grand_medical += $total_medical;
+        $grand_house += $total_house;
+
 			if($sl_no == $total_rows_count){
 				$html .= '<tr>
-						<td colspan="9" align="center" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+						<td height="10" colspan="9" align="center" style="color: red; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>OVERALL TOTAL</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+						<td height="10" align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>'.$salary_grand_total .'</b>
 						</td>
-						<td align="center" style="font-size:9px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+						<td height="10" align="center" style="font-size:9px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>'.$overt_time_grand_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+
+						<td height="10"  align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>'.$allowance_grand_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+						<td height="10"  align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
+							<b>'.$grand_conveyance.'</b>
+						</td>
+						<td height="10"  align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
+							<b>'.$grand_food.'</b>
+						</td>
+						<td height="10"  align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
+							<b>'.$grand_medical.'</b>
+						</td>
+						<td height="10"  align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
+							<b>'.$grand_house.'</b>
+						</td>
+
+						<td height="10" align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>'.$total_payable_grand_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+						<td height="10" align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>'.$advance_loan_grand_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
+						<td height="10" align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 24px; height: 24px;">
 							<b>'.$net_pay_grand_total.'</b>
 						</td>
-						<td align="center" style="font-size:10px; color: red; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; line-height: 20px; height: 20px;">
-						</td>
+						
 					</tr>';
 			}
 			
 			$this_month_salary_total = $amount_of_overtime_total = $allowance_amount_total = $total_payable_total = $advance_loan_total = $net_pay_total = 0;
+			$total_allowance_column = $total_conveyance = $total_food = $total_medical = $total_house = 0;
 			
-			if($sl_no%10 == 0){
+			if($sl_no%10 == 0 && $sl_no < $total_rows_count){
 				$page_no++;
 				$html .= '</tbody></table><br pagebreak="true"/><table width="100%"  cellpadding="2" cellspacing="0"><thead>
 		
 				<tr style="background-color: #FFFF00; color: #000;">
-					<th align="center" style="width:25px; font-size:7px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">S/NO</th>
-					<th align="center" style="width:40px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">CODE NO</th>
+					<th align="center" style="width:20px; font-size:7px; border-right: 1px solid #000; border-left: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">S/NO</th>
+					<th align="center" style="width:30px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">CODE NO</th>
 					<th align="center" style="width:100px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">FULL NAME</th>
 					<th align="center" style="width:50px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">PASSPORT NO</th>
 					<th align="center" style="width:60px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">DESIGNATION</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">NUMBER OF DATES</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME (HOUR)</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">MONTHLY SALARY</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME FOR AN HOUR</th> 
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">SALARY FOR THIS MONTH</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">AMOUNT OF OVERTIME</th> 
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ALLOWANCE AMOUNT</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">NUMBER OF DATES</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME (HOUR)</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">MONTHLY SALARY</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">OVERTIME FOR AN HOUR</th> 
+					<th align="center" style="width:40px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">SALARY FOR THIS MONTH</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">AMOUNT OF OVERTIME</th> 
+					<th align="center" style="width:40px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ALLOWANCE</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">CONVEYANCE ALLOWANCE</th>
+					<th align="center" style="width:35px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">FOOD ALLOWANCE</th>
+					<th align="center" style="width:38px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">MEDICAL ALLOWANCE</th>
+					<th align="center" style="width:38px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">HOUSING ALLOWANCE</th>
 					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">TOTAL PAYABLE</th>
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ADVANCE/  LOAN</th>
+					<th align="center" style="width:38px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">ADVANCE/  LOAN</th>
 					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">NET PAYABLE</th> 
-					<th align="center" style="width:45px; font-size:7px; border-right: 1px solid #000; border-bottom: 1px solid #000; border-top: 1px solid #000;">SIGNATURE</th>
+					
 				</tr>
 			</thead><tbody>';
 			}

@@ -93,25 +93,43 @@ $(document).ready(function(){
 		$('.net_payable_'+row_id).val(net_payable);
 	}
 	
-	$('.generate_salary_submit-btn').on('click', function(e){
+	$('#generate_salary_btn').on('submit', function(e){
 		e.preventDefault();
-
-		let myform = document.getElementById("generate_salary_btn");
-		let fd = new FormData(myform );
+		var buttons = $(this).find('.generate_salary_submit-btn');
+		if (buttons.prop('disabled')) { return; }
+		var payload = {};
+		$(this).serializeArray().forEach(function(field) {
+			if (field.name.endsWith('[]')) {
+				var name = field.name.slice(0, -2);
+				if (!payload[name]) { payload[name] = []; }
+				payload[name].push(field.value);
+			} else {
+				payload[field.name] = field.value;
+			}
+		});
+		buttons.prop('disabled', true).val('Saving...');
+		$('.loader').show();
 
 		$.ajax({
 			type: "POST",
 			url: 'ajax_generate_salary.php',
-			data: fd,
-			cache: false,
-			processData: false,
-			contentType: false,
-			beforeSend: function(){
-				
-			},
+			data: JSON.stringify(payload),
+			contentType: 'application/json; charset=utf-8',
+			dataType: 'json',
 			success: function(data){
-				$('.loader').css('display', 'block');
-				location.reload();
+				if (data.success && data.saved_count === payload.attendance_id.length) {
+					alert('Saved salary for ' + data.saved_count + ' employees.');
+					location.reload();
+				} else {
+					alert(data.message || 'Salary was not saved completely. Please try again.');
+				}
+			},
+			error: function(xhr){
+				alert(xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Unable to save salary. Please try again.');
+			},
+			complete: function(){
+				$('.loader').hide();
+				buttons.prop('disabled', false).val('Save All');
 			}
 		});
 	});//end form submit

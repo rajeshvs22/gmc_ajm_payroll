@@ -420,7 +420,7 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 require '../footer.php'
 
 ?>
- <script  src="<?php echo WEB_URL; ?>assets/js/c_generate_salary.js?34534534534"></script>
+ <script  src="<?php echo WEB_URL; ?>assets/js/c_generate_salary.js?v=20261004-save-json"></script>
  <script>
 $(document).ready(function(){
     // Add blur event listener to all deduct_loan input fields

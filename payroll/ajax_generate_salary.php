@@ -1,10 +1,58 @@
 <?php
-///Warning: Unknown: Input variables exceeded 1000. To increase the limit change max_input_vars in php.ini. in Unknown on line 0
 require '../config.php';
 
-$work_status = $_SESSION['work_status'];
-print_r($_POST['net_payable1']);
-//print_r($_SESSION);
+header('Content-Type: application/json; charset=utf-8');
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+$transaction_started = false;
+
+try {
+    if (empty($_SESSION['logged_in'])) {
+        http_response_code(401);
+        throw new RuntimeException('Please sign in again before saving salary.');
+    }
+    if (stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') === 0) {
+        $_POST = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+    }
+    if (!is_array($_POST) || empty($_POST['cmpy']) || empty($_POST['salary_month']) || empty($_POST['salary_year'])) {
+        throw new InvalidArgumentException('Company, month and year are required.');
+    }
+    $company_id = filter_var($_POST['cmpy'], FILTER_VALIDATE_INT);
+    $month = filter_var($_POST['salary_month'], FILTER_VALIDATE_INT);
+    $year = filter_var($_POST['salary_year'], FILTER_VALIDATE_INT);
+    if (!$company_id || $company_id < 1 || !$month || $month < 1 || $month > 12 || !$year || $year < 2020 || $year > 2050) {
+        throw new InvalidArgumentException('Invalid company or payroll period.');
+    }
+    $fields = ['attendance_id', 'emp_id', 'no_of_wdays', 'e_overtime', 'salary', 'over_time_hour_rate',
+        'salary_for_this_month', 'overtime_sal_for_curent_month', 'allowance', 'loan_amount',
+        'deduct_loan', 'net_payable', 'total_payable', 'work_status', 'emp_code', 'emp_name',
+        'employee_molid', 'account_no', 'labor_card_no', 'agent_bank_routing_code', 'corporate_mol_estid',
+        'corporate_account_no', 'position_name', 'dept_name', 'employe_status', 'food_allowance',
+        'conveyance_allowance', 'medical_allowance', 'housing_allowance'];
+    if (empty($_POST['attendance_id']) || !is_array($_POST['attendance_id'])) {
+        throw new InvalidArgumentException('No employee salary rows were received.');
+    }
+    $count = count($_POST['attendance_id']);
+    foreach ($fields as $field) {
+        if (!isset($_POST[$field]) || !is_array($_POST[$field]) || count($_POST[$field]) !== $count || array_keys($_POST[$field]) !== range(0, $count - 1)) {
+            throw new InvalidArgumentException('Incomplete salary data. Refresh the page and try again.');
+        }
+        foreach ($_POST[$field] as &$value) {
+            if (!is_scalar($value)) {
+                throw new InvalidArgumentException('Invalid employee salary data.');
+            }
+            $value = $conn->real_escape_string((string)$value);
+        }
+        unset($value);
+    }
+    if (count(array_unique($_POST['attendance_id'])) !== $count) {
+        throw new InvalidArgumentException('Duplicate employee attendance rows.');
+    }
+    $closed = $conn->query("SELECT employee_payroll_close_id FROM employee_payroll_close WHERE company_id='$company_id' AND month='$month' AND year='$year' AND payroll_status=1");
+    if ($closed->num_rows > 0) {
+        throw new RuntimeException('This payroll period is closed and cannot be saved.');
+    }
+    $conn->begin_transaction();
+    $transaction_started = true;
 
 if(isset($_POST['cmpy']) && isset($_POST['salary_month']) && isset($_POST['salary_year'])){
 	
@@ -39,19 +87,24 @@ if(isset($_POST['cmpy']) && isset($_POST['salary_month']) && isset($_POST['salar
 		$net_payable = $_POST['net_payable'][$i];
 		$emp_id = $_POST['emp_id'][$i];
 		$attendance_id = $_POST['attendance_id'][$i];
+        $attendance = $conn->query("SELECT attendance_id FROM employee_attendance WHERE attendance_id='$attendance_id' AND ref_emp_id='$emp_id' AND ref_comp_id='$company_id' AND month='$month' AND year='$year'");
+        if ($attendance->num_rows !== 1) {
+            throw new InvalidArgumentException('Employee attendance does not match this company and payroll period.');
+        }
+
 
 		// Start employee project name
 		$getAllCmpyQry = "SELECT pe.ref_proj_id ,pd.proj_name FROM project_employees as pe 
 							JOIN project_details as pd ON pd.proj_id = pe.ref_proj_id	
 						WHERE 1=1 AND pe.ref_emp_id = '".$emp_id."' AND pe.emp_proj_status ='1' " ;
 		$qryExe = mysqli_query($conn, $getAllCmpyQry); 
-		$ref_proj_id = '';
+		$ref_proj_id = 0;
 		$proj_name = '';
 		if(mysqli_num_rows($qryExe) > 0){
 													
 			while($project_row = mysqli_fetch_row($qryExe)){ 
 				$ref_proj_id = $project_row[0];
-				$proj_name = $project_row[1];
+				$proj_name = $conn->real_escape_string($project_row[1]);
 			}
 		} 
 		// End
@@ -178,10 +231,21 @@ if(isset($_POST['cmpy']) && isset($_POST['salary_month']) && isset($_POST['salar
 				}
 	}
 	
-	 header('Location: salary_list.php', true);
-	 die();
+    $conn->commit();
+    $transaction_started = false;
+    echo json_encode(['success' => true, 'saved_count' => $count]);
 	
 }
 
 
-?>
+} catch (Throwable $error) {
+    if ($transaction_started) {
+        $conn->rollback();
+    }
+    if (http_response_code() !== 401) {
+        http_response_code($error instanceof InvalidArgumentException || $error instanceof JsonException ? 400 : 500);
+    }
+    error_log('Payroll save failed: ' . $error->getMessage());
+    $message = $error instanceof mysqli_sql_exception ? 'Salary could not be saved. No changes were applied. Please check the server error log.' : $error->getMessage();
+    echo json_encode(['success' => false, 'message' => $message]);
+}
