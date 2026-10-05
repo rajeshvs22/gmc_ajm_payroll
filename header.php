@@ -458,6 +458,7 @@ $work_status = $_SESSION['work_status'];
 								<ul style="display: none;">
 									<li><a href="<?= WEB_URL ?>reports/collected_loan_report.php">Collected Loan Report</a></li>
 									<li><a href="<?= WEB_URL ?>reports/employee_expanse_report.php">Employee Expanse Report</a></li>
+									<li><a href="<?= WEB_URL ?>reports/increment_report.php">Increment Report</a></li>
 									
 								</ul>
 							</li>
