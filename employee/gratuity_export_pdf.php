@@ -19,7 +19,7 @@ ob_start();
 
 <?php
 include('../config/db.php');
-$qry = mysqli_query($conn, "SELECT emp_name, emp_code, joining_date FROM employee");
+$qry = mysqli_query($conn, "SELECT emp_name, emp_code, joining_date FROM employee WHERE employe_status = 0");
 while($r = mysqli_fetch_assoc($qry)){
     echo "<tr>
         <td>{$r['emp_name']}</td>

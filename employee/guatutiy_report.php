@@ -331,7 +331,7 @@ function gratuityAmount($joining_date, $end_date, $salary)
                                 </tr>
                             </thead>
                             <tbody><?php
-                                $getAllEmpQry = array();
+                                $getAllEmpQry = '';
                                 // Fetch employees with optional saved gratuity join
                                 if(isset($_GET['search']) && !empty($_GET['search'])){
                                         $getAllEmpQry = "SELECT e.*, cm.company_name,
@@ -339,13 +339,13 @@ function gratuityAmount($joining_date, $end_date, $salary)
                                                 (SELECT position_name FROM position_master WHERE position_id = e.position) AS position_name
                                                 FROM employee AS e
                                                 LEFT JOIN company_master cm ON cm.comp_id = e.ref_comp_id
-                                                WHERE 1 $condition
+                                                WHERE e.employe_status = 0 $condition
                                                 ORDER BY e.emp_name ASC";
                                 }
                                 
 
-                                $qryExe = mysqli_query($conn, $getAllEmpQry);
-                                if(mysqli_num_rows($qryExe) > 0){
+                                $qryExe = $getAllEmpQry !== '' ? mysqli_query($conn, $getAllEmpQry) : null;
+                                if($qryExe && mysqli_num_rows($qryExe) > 0){
                                     $sl_no = 1;
                                     while($row = mysqli_fetch_assoc($qryExe)){
 
