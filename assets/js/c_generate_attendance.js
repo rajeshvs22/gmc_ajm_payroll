@@ -3,6 +3,9 @@ $(document).ready(function(){
 	//alert();
 	$( "#generate_attendance_fm" ).submit(function( e ) {
 		e.preventDefault(); 
+		if (document.readyState !== 'complete') {
+			return;
+		}
 		var month = $('#month').val();
 		var year = $('#year').val();
 		var base_url = $('#base_url').val();
@@ -99,6 +102,15 @@ $(document).ready(function(){
             form.reportValidity();
         }
     }).on('submit', function (e) {
+        e.preventDefault();
+        if (document.readyState !== 'complete') {
+            return;
+        }
+        var form = this;
+        var buttons = $(form).find('button[type="submit"]');
+        if (buttons.prop('disabled')) {
+            return;
+        }
         if (!this.checkValidity()) {
             e.preventDefault();
             this.reportValidity();
@@ -110,19 +122,43 @@ $(document).ready(function(){
         fields.forEach(function (field) {
             attendance[field.name] = field.value;
         });
-        var payload = this.querySelector('input[name="attendance_payload"]');
-        if (!payload) {
-            payload = document.createElement('input');
-            payload.type = 'hidden';
-            payload.name = 'attendance_payload';
-            this.appendChild(payload);
-        }
-        payload.value = JSON.stringify(attendance);
-        // Keep just the payload, selected period and submit button in the POST.
+        var status = $('#attendance-save-status');
+        status.hide().removeClass('alert-success alert-danger');
+        buttons.prop('disabled', true).text('Saving...');
         fields.forEach(function (field) {
             field.disabled = true;
         });
-        $('.loader').css('display', 'block');
+        $('.loader').show();
+        $.ajax({
+            url: window.location.href,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                attendance_ajax: '1',
+                submit: 'submit',
+                month: form.querySelector('input[name="month"]').value,
+                year: form.querySelector('input[name="year"]').value,
+                attendance_payload: JSON.stringify(attendance)
+            },
+            success: function (data) {
+                status.addClass(data.success ? 'alert-success' : 'alert-danger')
+                    .text(data.message || 'Attendance could not be saved. Please try again.').show();
+            },
+            error: function (xhr) {
+                status.addClass('alert-danger').text(
+                    xhr.responseJSON && xhr.responseJSON.message
+                        ? xhr.responseJSON.message
+                        : 'Unable to confirm attendance was saved. Please try again.'
+                ).show();
+            },
+            complete: function () {
+                $('.loader').hide();
+                fields.forEach(function (field) {
+                    field.disabled = false;
+                });
+                buttons.prop('disabled', false).text('Save All');
+            }
+        });
     });
 	
 	
@@ -218,4 +254,17 @@ $(document).ready(function(){
 		
 		});
 	});
+
+    // Wait for all page resources, not just the attendance form's markup.
+    function enableAttendanceSubmitButtons() {
+        $('#generate_attendance_fm button[type="submit"]').prop('disabled', false);
+        if (attendanceForm && attendanceForm.querySelector('.attendance-working-days')) {
+            $('#add-sal-form button[type="submit"]').prop('disabled', false);
+        }
+    }
+    if (document.readyState === 'complete') {
+        enableAttendanceSubmitButtons();
+    } else {
+        window.addEventListener('load', enableAttendanceSubmitButtons, { once: true });
+    }
 });

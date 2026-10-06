@@ -122,7 +122,9 @@ $months = array(1 => 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
                                     <th>Employee Name</th>
                                     <th>Date</th>
                                     <th class="text-right">Basic Salary</th>
+                                    <th class="text-right">Previous Allowance</th>
                                     <th class="text-right">Increment Amount</th>
+                                    <th class="text-right">Increment Allowance</th>
                                     <th class="text-right">Total Salary</th>
                                 </tr>
                             </thead>
@@ -136,7 +138,9 @@ $months = array(1 => 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
                                         <td><?= incrementReportEscape($row['emp_name']) ?></td>
                                         <td data-order="<?= $validDate ? incrementReportEscape($date) : '' ?>"><?= $validDate ? date('d-m-Y', strtotime($date)) : '-' ?></td>
                                         <td class="text-right"><?= number_format((float) $row['previous_salary'], 2) ?></td>
+                                        <td class="text-right"><?= number_format((float) $row['previous_allowance'], 2) ?></td>
                                         <td class="text-right"><?= number_format((float) $row['increment_amt'], 2) ?></td>
+                                        <td class="text-right"><?= number_format((float) $row['increment_allowance'], 2) ?></td>
                                         <td class="text-right"><?= number_format((float) $row['current_inc_salary'], 2) ?></td>
                                     </tr>
                                 <?php } ?>
@@ -154,7 +158,7 @@ $months = array(1 => 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
 $(document).ready(function () {
     $('#increment-report-table').DataTable({
         pageLength: 25,
-        order: [[2, 'desc']],
+        order: [[2, 'asc']],
         language: { emptyTable: 'No increments found for the selected filters.' }
     });
 });

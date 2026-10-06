@@ -25,7 +25,7 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 				</div>
 			</div>
 		</div> 
-		<form name="generate_salary_fm" id="generate_salary_fm" method="POST">
+		<form name="generate_salary_fm" id="generate_salary_fm" method="POST" onsubmit="return document.readyState === 'complete';">
 			<div class="row filter-row">
 				<div class="col-sm-4 col-md-3"> 
 					<div class="form-group form-focus select-focus">
@@ -79,7 +79,7 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 				
 				<div class="col-sm-3 col-md-3">  
 					<input type="hidden" name="base_url" id="base_url" value="<?= WEB_URL ?>">
-					<button class="btn btn-success btn-block" name="submit" value="submit" type="submit">Go</button>
+					<button class="btn btn-success btn-block" name="submit" value="submit" type="submit" disabled>Go</button>
 				</div>    
 			</div>
 		</form>
@@ -93,11 +93,11 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 			
 
 			?>
-				<form method="post" action="ajax_generate_salary.php" id="generate_salary_btn" >
+				<form method="post" action="ajax_generate_salary.php" id="generate_salary_btn" onsubmit="return document.readyState === 'complete';">
 					<div class="row ">
 						<div class="col-md-12 text-right mb-3">
 							<!--<button class="btn btn-primary generate_salary_submit-btn" type="submit" name="submit" value="submit">Save All</button> -->
-							<input class="btn btn-primary generate_salary_submit-btn"  type="submit" name="submit" value="Save All" >
+							<input class="btn btn-primary generate_salary_submit-btn"  type="submit" name="submit" value="Save All" disabled>
 						</div>
 						<div class="col-md-12">
 							<!--- <form id="generate_salary_fm" method="POST"> --->
@@ -397,7 +397,7 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 									<input type="hidden" value="<?= $_GET['month'] ?>" id="salary_month" name="salary_month">
 									<input type="hidden" value="<?= $_GET['year'] ?>" id="salary_year" name="salary_year">
 									<!--<button class="btn btn-primary generate_salary_submit-btn"  type="submit" name="submit" value="submit">Save All</button>-->
-									<input class="btn btn-primary generate_salary_submit-btn"  type="submit" name="submit" value="Save All" >
+									<input class="btn btn-primary generate_salary_submit-btn"  type="submit" name="submit" value="Save All" disabled>
 								</div>
 							<!---- </form> --->
 						</div>
@@ -420,7 +420,7 @@ if(isset($_GET['cmpy']) && !empty($_GET['cmpy'])){
 require '../footer.php'
 
 ?>
- <script  src="<?php echo WEB_URL; ?>assets/js/c_generate_salary.js?v=20261004-save-json"></script>
+ <script src="<?= WEB_URL ?>assets/js/c_generate_salary.js?v=<?= filemtime(__DIR__ . '/../assets/js/c_generate_salary.js') ?>"></script>
  <script>
 $(document).ready(function(){
     // Add blur event listener to all deduct_loan input fields

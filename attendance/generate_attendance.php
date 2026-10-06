@@ -1,6 +1,19 @@
 <?php
 
-include('../header.php');
+$attendance_ajax = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['attendance_ajax'] ?? '') === '1';
+if ($attendance_ajax) {
+    require '../config.php';
+    header('Content-Type: application/json; charset=utf-8');
+    if (empty($_SESSION['logged_in'])) {
+        http_response_code(401);
+        echo json_encode(array('success' => false, 'message' => 'Please sign in again before saving attendance.'));
+        exit;
+    }
+    $work_status = $_SESSION['work_status'];
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+} else {
+    include('../header.php');
+}
 
 $company = filter_var($_GET['cmpy'] ?? null, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1)));
 $param_month = filter_var($_GET['month'] ?? null, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 12)));
@@ -92,6 +105,10 @@ if (isset($_POST['submit']) && $attendance_error === '') {
             }
             $saved_count++;
         }
+        $submitted_count = count(preg_grep('/^no_of_wdays_\d+$/', array_keys($_POST)));
+        if ($saved_count === 0 || $saved_count !== $submitted_count) {
+            throw new RuntimeException('The submitted employee list could not be saved completely.');
+        }
         mysqli_commit($conn);
         $transaction_started = false;
         $attendance_success = 'Attendance saved successfully for ' . $saved_count . ' employees.';
@@ -106,6 +123,19 @@ if (isset($_POST['submit']) && $attendance_error === '') {
             mysqli_stmt_close($statement);
         }
     }
+}
+
+if ($attendance_ajax) {
+    $success = $attendance_error === '' && $attendance_success !== '';
+    if (!$success) {
+        http_response_code(400);
+    }
+    echo json_encode(array(
+        'success' => $success,
+        'message' => $success ? $attendance_success : ($attendance_error ?: 'No attendance was submitted.'),
+        'saved_count' => $success ? $saved_count : 0
+    ));
+    exit;
 }
 
 ?>
@@ -136,7 +166,7 @@ if (isset($_POST['submit']) && $attendance_error === '') {
 			</div>
 		</div>
 		
-		<form name="generate_attendance_fm" id="generate_attendance_fm" method="GET">
+		<form name="generate_attendance_fm" id="generate_attendance_fm" method="GET" onsubmit="return document.readyState === 'complete';">
 			<div class="row filter-row">
 				<div class="col-sm-4 col-md-3"> 
 					<div class="form-group form-focus select-focus">
@@ -190,7 +220,7 @@ if (isset($_POST['submit']) && $attendance_error === '') {
 				
 				<div class="col-sm-3 col-md-3">  
 					<input type="hidden" name="base_url" id="base_url" value="<?= WEB_URL ?>">
-					<button class="btn btn-success btn-block" name="submit" value="submit" type="submit">Go</button>
+					<button class="btn btn-success btn-block" name="submit" value="submit" type="submit" disabled>Go</button>
 				</div>    
 			</div>
 		</form>
@@ -204,10 +234,11 @@ if (isset($_POST['submit']) && $attendance_error === '') {
 		<?php }
 		if($valid_period){
 		?>
-		<form id="add-sal-form" method="POST">
+		<form id="add-sal-form" method="POST" onsubmit="return document.readyState === 'complete';">
+		<div id="attendance-save-status" class="alert" role="status" aria-live="polite" style="display: none;"></div>
 		<div class="row">
 			<div class="col-md-12 text-right mb-3">
-				<button class="btn btn-primary submit-btn" type="submit" name="submit">Save All</button>
+				<button class="btn btn-primary submit-btn" type="submit" name="submit" disabled>Save All</button>
 			</div>
 			<div class="col-md-12">
 				
@@ -300,7 +331,7 @@ if (isset($_POST['submit']) && $attendance_error === '') {
 						<div class="submit-section">
 							<input type="hidden" value="<?= $param_month ?>" name="month">
 							<input type="hidden" value="<?= $param_year ?>" name="year">
-							<button class="btn btn-primary submit-btn" type="submit" name="submit">Save All</button>
+							<button class="btn btn-primary submit-btn" type="submit" name="submit" disabled>Save All</button>
 						</div><?php
 					} ?>
 				
@@ -312,7 +343,7 @@ if (isset($_POST['submit']) && $attendance_error === '') {
 	</div>
 </div>
 
-<span class="loader" style="display: none;"></span>
+<span class="loader" role="status" aria-label="Saving attendance" style="display: none; top: calc(50% - 24px); z-index: 1060;"></span>
 
 <?php
 require '../footer.php'

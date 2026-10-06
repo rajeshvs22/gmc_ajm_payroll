@@ -33,7 +33,8 @@ function incrementReportRows($conn, array $filters, $workStatus)
         throw new InvalidArgumentException('Invalid increment report filters.');
     }
     $sql = 'SELECT si.increment_id, e.emp_code, e.emp_name, si.increment_dt,
-            si.previous_salary, si.increment_amt, si.current_inc_salary
+            si.previous_salary, si.previous_allowance, si.increment_amt,
+            si.increment_allowance, si.current_inc_salary
         FROM salary_increment si
         JOIN employee e ON e.emp_id = si.ref_emp_id
         WHERE e.work_status = ? AND e.employe_status = 0 AND si.increment_amt > 0';
@@ -63,7 +64,7 @@ function incrementReportRows($conn, array $filters, $workStatus)
         $types .= 'i';
         $params[] = $filters['project_id'];
     }
-    $stmt = mysqli_prepare($conn, $sql . ' ORDER BY si.increment_dt DESC, e.emp_code, si.increment_id DESC');
+    $stmt = mysqli_prepare($conn, $sql . ' ORDER BY si.increment_dt ASC, e.emp_code, si.increment_id ASC');
     try {
         mysqli_stmt_bind_param($stmt, $types, ...$params);
         mysqli_stmt_execute($stmt);

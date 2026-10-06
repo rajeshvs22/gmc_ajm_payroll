@@ -3,6 +3,9 @@ $(document).ready(function(){
 	
 	$( "#generate_salary_fm" ).submit(function( e ) {
 		e.preventDefault(); 
+		if (document.readyState !== 'complete') {
+			return;
+		}
 		var month = $('#month').val();
 		var year = $('#year').val();
 		var base_url = $('#base_url').val();
@@ -95,6 +98,9 @@ $(document).ready(function(){
 	
 	$('#generate_salary_btn').on('submit', function(e){
 		e.preventDefault();
+		if (document.readyState !== 'complete') {
+			return;
+		}
 		var buttons = $(this).find('.generate_salary_submit-btn');
 		if (buttons.prop('disabled')) { return; }
 		var payload = {};
@@ -457,4 +463,16 @@ $(document).ready(function(){
 
 	
 	
+    // Enable submission only after the whole page and its resources have loaded.
+    function enableSalarySubmitButtons() {
+        $('#generate_salary_fm button[type="submit"]').prop('disabled', false);
+        if ($('#generate_salary_btn input[name="attendance_id[]"]').length > 0) {
+            $('#generate_salary_btn .generate_salary_submit-btn').prop('disabled', false);
+        }
+    }
+    if (document.readyState === 'complete') {
+        enableSalarySubmitButtons();
+    } else {
+        window.addEventListener('load', enableSalarySubmitButtons, { once: true });
+    }
 })
