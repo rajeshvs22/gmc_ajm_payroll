@@ -340,7 +340,7 @@ function gratuityAmount($joining_date, $end_date, $salary)
                                                 FROM employee AS e
                                                 LEFT JOIN company_master cm ON cm.comp_id = e.ref_comp_id
                                                 WHERE e.employe_status = 0 $condition
-                                                ORDER BY e.emp_name ASC";
+                                                ORDER BY e.emp_id ASC";
                                 }
                                 
 
@@ -419,13 +419,13 @@ function gratuityAmount($joining_date, $end_date, $salary)
                                             <td><?= number_format($salary, 2) ?></td>
 
                                             <!-- Payable -->
-                                            <td><b><?= number_format($payable_amount, 2) ?></b></td>
+                                            <td><b><?= number_format(round($payable_amount, 0, PHP_ROUND_HALF_UP), 2) ?></b></td>
 
                                             <!-- ESFAND / Saved -->
-                                            <td><?= number_format($saved_amount, 2) ?></td>
+                                            <td><?= number_format(round($saved_amount, 0, PHP_ROUND_HALF_UP), 2) ?></td>
 
                                             <!-- Difference -->
-                                            <td><?= number_format($difference, 2) ?></td>
+                                            <td><?= number_format(round($difference, 0, PHP_ROUND_HALF_UP), 2) ?></td>
                                         </tr><?php
                                         $sl_no++;
                                     }

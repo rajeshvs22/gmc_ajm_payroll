@@ -16,7 +16,7 @@ echo "<table border='1'>
 <th>Difference</th>
 </tr>";
 
-$qry = mysqli_query($conn, "SELECT emp_name, emp_code, joining_date, salary FROM employee WHERE employe_status = 0");
+$qry = mysqli_query($conn, "SELECT emp_name, emp_code, joining_date, salary FROM employee WHERE employe_status = 0 ORDER BY emp_id ASC");
 
 while($r = mysqli_fetch_assoc($qry)){
     echo "<tr>
